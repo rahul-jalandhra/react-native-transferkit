@@ -1,1 +1,6 @@
-export { multiply } from './multiply';
+export {
+  useTransferStream,
+  startStream,
+  addStreamListener,
+  cancelStream,
+} from './stream';
