@@ -276,9 +276,9 @@ onStreamCompleteListener(callback)
 
 ```ts
 const streamCompleteListener =
-  onStreamCompleteListener(event => {
+  onStreamCompleteListener(() => {
 
-    console.log(event.data);
+    console.log("STREAM COMPLETED");
   });
 
 streamCompleteListener.remove();
@@ -298,9 +298,9 @@ onStreamCancelListener(callback)
 
 ```ts
 const streamCancelListener =
-  onStreamCancelListener(event => {
+  onStreamCancelListener(() => {
 
-    console.log(event.data);
+    console.log("STREAM CANCELLED");
   });
 
 streamCancelListener.remove();
@@ -320,9 +320,9 @@ onStreamErrorListener(callback)
 
 ```ts
 const streamErrorListener =
-  onStreamErrorListener(event => {
+  onStreamErrorListener(error => {
 
-    console.log(event.data);
+    console.log(error);
   });
 
 streamErrorListener.remove();
