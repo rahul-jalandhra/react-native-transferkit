@@ -1,21 +1,20 @@
 import { useEffect, useState } from 'react';
 import { Text, View, StyleSheet, ScrollView } from 'react-native';
 
-import { addStreamListener, startStream } from 'react-native-transferkit';
+import { onStreamDataListener, startStream } from 'react-native-transferkit';
 
 export default function App() {
   const [streamData, setStreamData] = useState('');
 
   const newStartStream = () => {
     setStreamData('');
-
+    //example stream url, you can replace it with your own stream url
     startStream('https://jsonplaceholder.typicode.com/posts/1', 'GET', {}, '');
   };
 
   useEffect(() => {
-    const listener = addStreamListener((event) => {
+    const listener = onStreamDataListener((event) => {
       console.log('STREAM:', event);
-
       setStreamData((prev) => prev + (event.data || ''));
     });
 

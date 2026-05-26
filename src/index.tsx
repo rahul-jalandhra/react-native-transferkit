@@ -1,6 +1,9 @@
 export {
   useTransferStream,
   startStream,
-  addStreamListener,
   cancelStream,
+  onStreamDataListener,
+  onStreamCompleteListener,
+  onStreamCancelListener,
+  onStreamErrorListener,
 } from './stream';

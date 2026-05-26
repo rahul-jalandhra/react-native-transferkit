@@ -242,24 +242,90 @@ cancelStream()
 
 ---
 
-## addStreamListener
+## onStreamDataListener
 
 Listen for incoming stream chunks.
 
 ```ts
-addStreamListener(callback)
+onStreamDataListener(callback)
 ```
 
 ### Example
 
 ```ts
-const listener =
-  addStreamListener(event => {
+const streamDataListener =
+  onStreamDataListener(event => {
 
     console.log(event.data);
   });
 
-listener.remove();
+streamDataListener.remove();
+```
+
+---
+
+## onStreamCompleteListener
+
+Listen for incoming stream chunks.
+
+```ts
+onStreamCompleteListener(callback)
+```
+
+### Example
+
+```ts
+const streamCompleteListener =
+  onStreamCompleteListener(event => {
+
+    console.log(event.data);
+  });
+
+streamCompleteListener.remove();
+```
+
+---
+
+## onStreamCancelListener
+
+Listen for incoming stream chunks.
+
+```ts
+onStreamCancelListener(callback)
+```
+
+### Example
+
+```ts
+const streamCancelListener =
+  onStreamCancelListener(event => {
+
+    console.log(event.data);
+  });
+
+streamCancelListener.remove();
+```
+
+---
+
+## onStreamErrorListener
+
+Listen for incoming stream chunks.
+
+```ts
+onStreamErrorListener(callback)
+```
+
+### Example
+
+```ts
+const streamErrorListener =
+  onStreamErrorListener(event => {
+
+    console.log(event.data);
+  });
+
+streamErrorListener.remove();
 ```
 
 ---
