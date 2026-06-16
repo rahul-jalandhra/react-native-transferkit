@@ -276,18 +276,18 @@ streamErrorListener.remove();
 
 ## startUpload
 
-Starts a background file upload with optional progress tracking and notifications.
+Starts a background file upload using the current native upload API.
 
 ```ts
-startUpload(
+startUpload({
   url: string,
   filePath: string,
-  method: string,
-  headers: Record<string, string>,
-  body: string,
-  enableNotification?: boolean,
-  notificationTitle?: string
-)
+  fileName: string,
+  mimeType: string,
+  fieldName: string,
+  method?: string,
+  headers?: Record<string, string>,
+});
 ```
 
 ### Example
@@ -295,18 +295,17 @@ startUpload(
 ```ts
 import { startUpload } from 'react-native-transferkit';
 
-startUpload(
-  'https://your-api.com/upload',
-  'file:///path/to/large-file.zip',
-  'POST',
-  {
-    'Authorization': 'Bearer token',
-    'Content-Type': 'multipart/form-data',
+startUpload({
+  url: 'https://your-api.com/upload',
+  filePath: 'file:///path/to/large-file.zip',
+  fileName: 'large-file.zip',
+  mimeType: 'application/zip',
+  fieldName: 'file',
+  method: 'POST',
+  headers: {
+    Authorization: 'Bearer token',
   },
-  JSON.stringify({ metadata: 'value' }),
-  true,
-  'Uploading file...'
-);
+});
 ```
 
 ---
@@ -433,15 +432,22 @@ cancel();
 
 ---
 
-## useTransferUpload
+### Use background upload
 
 High-level hook API for background file uploads with progress tracking.
 
 ### Return Values
 
 ```ts
-const { uploading, progress, error, response, start, cancel } =
-  useTransferUpload();
+const {
+  progress,
+  loading,
+  completed,
+  cancelled,
+  error,
+  start,
+  cancel,
+} = useBackgroundUpload();
 ```
 
 ### start()
@@ -450,23 +456,30 @@ const { uploading, progress, error, response, start, cancel } =
 start({
   url,
   filePath,
-  method,
-  headers,
-  body,
-  enableNotification,
-  notificationTitle,
+  fileName,
+  mimeType,
+  fieldName,
+  method?,
+  headers?,
 });
 ```
 
 ### Example
 
 ```tsx
-import { useTransferUpload } from 'react-native-transferkit';
+import { useBackgroundUpload } from 'react-native-transferkit';
 import { Button, Text, View } from 'react-native';
 
 export default function UploadExample() {
-  const { uploading, progress, error, response, start, cancel } =
-    useTransferUpload();
+  const {
+    progress,
+    loading,
+    completed,
+    cancelled,
+    error,
+    start,
+    cancel,
+  } = useBackgroundUpload();
 
   return (
     <View style={{ flex: 1, padding: 20 }}>
@@ -476,23 +489,23 @@ export default function UploadExample() {
           start({
             url: 'https://your-api.com/upload',
             filePath: 'file:///path/to/file.pdf',
+            fileName: 'file.pdf',
+            mimeType: 'application/pdf',
+            fieldName: 'file',
             method: 'POST',
             headers: {
               Authorization: 'Bearer token',
             },
-            enableNotification: true,
-            notificationTitle: 'File Upload',
           })
         }
       />
 
-      <Button title="Cancel Upload" onPress={cancel} disabled={!uploading} />
+      <Button title="Cancel Upload" onPress={cancel} disabled={!loading} />
 
-      {uploading && <Text>Upload Progress: {progress}%</Text>}
-
+      {loading && <Text>Upload Progress: {progress}%</Text>}
+      {completed && <Text>Upload complete</Text>}
+      {cancelled && <Text>Upload cancelled</Text>}
       {error && <Text>Error: {error}</Text>}
-
-      {response && <Text>Response: {JSON.stringify(response)}</Text>}
     </View>
   );
 }
