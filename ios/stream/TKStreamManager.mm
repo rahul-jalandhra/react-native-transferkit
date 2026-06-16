@@ -83,11 +83,12 @@
 
     self.task = nil;
 
-    [[TransferkitEventEmitter shared]
-        sendEventWithName:@"onStreamCancel"
-                     body:@{
+    [[NSNotificationCenter defaultCenter]
+        postNotificationName:TransferkitStreamCancelNotification
+                      object:nil
+                    userInfo:@{
                         @"data": @"cancelled"
-                     }];
+                    }];
 }
 
 #pragma mark - NSURLSessionDataDelegate
@@ -104,11 +105,12 @@
 
     NSLog(@"Chunk: %@", chunk);
 
-    [[TransferkitEventEmitter shared]
-        sendEventWithName:@"onStreamData"
-                     body:@{
+    [[NSNotificationCenter defaultCenter]
+        postNotificationName:TransferkitStreamDataNotification
+                      object:nil
+                    userInfo:@{
                         @"data": chunk ?: @""
-                     }];
+                    }];
 }
 
 - (void)URLSession:(NSURLSession *)session
@@ -121,23 +123,23 @@ didCompleteWithError:(NSError *)error
         NSLog(@"Stream Error: %@",
               error.localizedDescription);
 
-        [[TransferkitEventEmitter shared]
-            sendEventWithName:@"onStreamError"
-                         body:@{
-                            @"data":
-                                error.localizedDescription
-                                    ?: @"Unknown error"
-                         }];
+        [[NSNotificationCenter defaultCenter]
+            postNotificationName:TransferkitStreamErrorNotification
+                          object:nil
+                        userInfo:@{
+                            @"data": error.localizedDescription ?: @"Unknown error"
+                        }];
 
     } else {
 
         NSLog(@"Stream Complete");
 
-        [[TransferkitEventEmitter shared]
-            sendEventWithName:@"onStreamComplete"
-                         body:@{
+        [[NSNotificationCenter defaultCenter]
+            postNotificationName:TransferkitStreamCompleteNotification
+                          object:nil
+                        userInfo:@{
                             @"data": @"done"
-                         }];
+                        }];
     }
 }
 

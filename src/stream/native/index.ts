@@ -1,7 +1,5 @@
-import { NativeEventEmitter, NativeModules } from 'react-native';
 import Transferkit from '../../NativeTransferkit';
-
-const emitter = new NativeEventEmitter(NativeModules.TransferkitEventEmitter);
+import { eventEmitter } from '../../eventEmitter';
 
 export function startStream(
   url: string,
@@ -17,17 +15,17 @@ export function cancelStream() {
 }
 
 export function onStreamDataListener(callback: (event: any) => void) {
-  return emitter.addListener('onStreamData', callback);
+  return eventEmitter.addListener('onStreamData', callback);
 }
 
 export function onStreamCompleteListener(callback: (event: any) => void) {
-  return emitter.addListener('onStreamComplete', callback);
+  return eventEmitter.addListener('onStreamComplete', callback);
 }
 
 export function onStreamCancelListener(callback: (event: any) => void) {
-  return emitter.addListener('onStreamCancel', callback);
+  return eventEmitter.addListener('onStreamCancel', callback);
 }
 
 export function onStreamErrorListener(callback: (event: any) => void) {
-  return emitter.addListener('onStreamError', callback);
+  return eventEmitter.addListener('onStreamError', callback);
 }

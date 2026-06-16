@@ -6,12 +6,14 @@ import com.facebook.react.bridge.ReadableMap
 import com.facebook.react.bridge.WritableMap
 import com.facebook.react.modules.core.DeviceEventManagerModule
 import com.transferkit.stream.StreamManager
+import com.transferkit.upload.UploadManager
 
 class TransferkitModule(
     private val context: ReactApplicationContext
 ) : NativeTransferkitSpec(context) {
 
     private val streamManager = StreamManager()
+    private val uploadManager = UploadManager(context)
 
     override fun startStream(
         url: String,
@@ -57,21 +59,77 @@ class TransferkitModule(
         streamManager.cancelStream()
     }
 
+    override fun startBackgroundUpload(
+        url: String,
+        filePath: String,
+        fileName: String,
+        mimeType: String,
+        fieldName: String,
+        method: String,
+        headers: ReadableMap
+    ) {
+        val headersMap = mutableMapOf<String, String>()
+        val iterator = headers.keySetIterator()
+
+        while (iterator.hasNextKey()) {
+            val key = iterator.nextKey()
+            headersMap[key] = headers.getString(key) ?: ""
+        }
+
+        uploadManager.startUpload(
+            url = url,
+            filePath = filePath,
+            fileName = fileName,
+            mimeType = mimeType,
+            fieldName = fieldName,
+            method = method,
+            headers = headersMap,
+            onProgress = { progress ->
+                val params: WritableMap = Arguments.createMap()
+                params.putDouble("progress", progress)
+                sendEvent("onUploadProgress", params)
+            },
+            onComplete = {
+                sendEvent("onUploadComplete", Arguments.createMap().apply {
+                    putBoolean("success", true)
+                })
+            },
+            onError = { error ->
+                sendEvent("onUploadError", Arguments.createMap().apply {
+                    putString("error", error)
+                })
+            },
+            onCancel = {
+                sendEvent("onUploadCancel", Arguments.createMap().apply {
+                    putBoolean("success", true)
+                })
+            }
+        )
+    }
+
+    override fun cancelUpload() {
+        uploadManager.cancelUpload()
+    }
+
     private fun sendEvent(
         eventName: String,
-        value: String
+        params: WritableMap
     ) {
-
-        val params: WritableMap = Arguments.createMap()
-
-        params.putString("data", value)
-
         context
             .getJSModule(
                 DeviceEventManagerModule
                     .RCTDeviceEventEmitter::class.java
             )
             .emit(eventName, params)
+    }
+
+    private fun sendEvent(
+        eventName: String,
+        value: String
+    ) {
+        val params: WritableMap = Arguments.createMap()
+        params.putString("data", value)
+        sendEvent(eventName, params)
     }
 
     companion object {

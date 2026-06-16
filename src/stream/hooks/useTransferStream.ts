@@ -1,8 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-
 import { startStream, cancelStream } from '../native';
-
-import { streamEmitter } from '../events/streamEmitter';
+import { eventEmitter } from '../../eventEmitter';
 
 export function useTransferStream() {
   const [data, setData] = useState('');
@@ -16,7 +14,7 @@ export function useTransferStream() {
   useEffect(() => {
     mountedRef.current = true;
 
-    const dataListener = streamEmitter.addListener(
+    const dataListener = eventEmitter.addListener(
       'onStreamData',
       (event: any) => {
         if (!mountedRef.current) return;
@@ -25,7 +23,7 @@ export function useTransferStream() {
       }
     );
 
-    const errorListener = streamEmitter.addListener(
+    const errorListener = eventEmitter.addListener(
       'onStreamError',
       (event: any) => {
         if (!mountedRef.current) return;
@@ -36,7 +34,7 @@ export function useTransferStream() {
       }
     );
 
-    const completeListener = streamEmitter.addListener(
+    const completeListener = eventEmitter.addListener(
       'onStreamComplete',
       () => {
         if (!mountedRef.current) return;
