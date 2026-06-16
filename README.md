@@ -26,6 +26,9 @@ High-performance background and foreground streaming toolkit for React Native on
 - ✅ Minimal dependencies
 - ✅ Scalable SDK structure
 - ✅ Stream cancellation support
+- ✅ Background file uploads
+- ✅ Upload progress tracking
+- ✅ Android notifications for upload progress
 
 ---
 
@@ -67,30 +70,15 @@ cd ios && pod install
 ```tsx
 import React from 'react';
 
-import {
-  Button,
-  ScrollView,
-  Text,
-  View,
-} from 'react-native';
+import { Button, ScrollView, Text, View } from 'react-native';
 
-import {
-  useTransferStream,
-} from 'react-native-transferkit';
+import { useTransferStream } from 'react-native-transferkit';
 
 export default function App() {
-
-  const {
-    data,
-    loading,
-    error,
-    start,
-    cancel,
-  } = useTransferStream();
+  const { data, loading, error, start, cancel } = useTransferStream();
 
   return (
     <View style={{ flex: 1, padding: 20 }}>
-
       <Button
         title="Start Stream"
         onPress={() =>
@@ -101,23 +89,15 @@ export default function App() {
         }
       />
 
-      <Button
-        title="Cancel Stream"
-        onPress={cancel}
-      />
+      <Button title="Cancel Stream" onPress={cancel} />
 
-      {loading && (
-        <Text>Streaming...</Text>
-      )}
+      {loading && <Text>Streaming...</Text>}
 
-      {error && (
-        <Text>{error}</Text>
-      )}
+      {error && <Text>{error}</Text>}
 
       <ScrollView>
         <Text>{data}</Text>
       </ScrollView>
-
     </View>
   );
 }
@@ -130,16 +110,9 @@ export default function App() {
 For advanced/custom implementations.
 
 ```tsx
-import React, {
-  useEffect,
-  useState,
-} from 'react';
+import React, { useEffect, useState } from 'react';
 
-import {
-  Button,
-  Text,
-  View,
-} from 'react-native';
+import { Button, Text, View } from 'react-native';
 
 import {
   startStream,
@@ -148,50 +121,29 @@ import {
 } from 'react-native-transferkit';
 
 export default function App() {
-
   const [data, setData] = useState('');
 
   useEffect(() => {
-
-    const listener =
-      addStreamListener(event => {
-
-        setData(prev =>
-          prev + (event.data || '')
-        );
-      });
+    const listener = addStreamListener((event) => {
+      setData((prev) => prev + (event.data || ''));
+    });
 
     return () => {
       listener.remove();
     };
-
   }, []);
 
   const onStart = () => {
-
-    startStream(
-      'https://your-stream-api.com',
-      'GET',
-      {},
-      ''
-    );
+    startStream('https://your-stream-api.com', 'GET', {}, '');
   };
 
   return (
     <View>
+      <Button title="Start Stream" onPress={onStart} />
 
-      <Button
-        title="Start Stream"
-        onPress={onStart}
-      />
-
-      <Button
-        title="Cancel Stream"
-        onPress={cancelStream}
-      />
+      <Button title="Cancel Stream" onPress={cancelStream} />
 
       <Text>{data}</Text>
-
     </View>
   );
 }
@@ -221,7 +173,7 @@ startStream(
   'https://your-api.com',
   'POST',
   {
-    Authorization: 'Bearer token',
+    'Authorization': 'Bearer token',
     'Content-Type': 'application/json',
   },
   JSON.stringify({
@@ -237,7 +189,7 @@ startStream(
 Cancels the active stream request.
 
 ```ts
-cancelStream()
+cancelStream();
 ```
 
 ---
@@ -247,17 +199,15 @@ cancelStream()
 Listen for incoming stream chunks.
 
 ```ts
-onStreamDataListener(callback)
+onStreamDataListener(callback);
 ```
 
 ### Example
 
 ```ts
-const streamDataListener =
-  onStreamDataListener(event => {
-
-    console.log(event.data);
-  });
+const streamDataListener = onStreamDataListener((event) => {
+  console.log(event.data);
+});
 
 streamDataListener.remove();
 ```
@@ -269,17 +219,15 @@ streamDataListener.remove();
 Listen for incoming stream chunks.
 
 ```ts
-onStreamCompleteListener(callback)
+onStreamCompleteListener(callback);
 ```
 
 ### Example
 
 ```ts
-const streamCompleteListener =
-  onStreamCompleteListener(() => {
-
-    console.log("STREAM COMPLETED");
-  });
+const streamCompleteListener = onStreamCompleteListener(() => {
+  console.log('STREAM COMPLETED');
+});
 
 streamCompleteListener.remove();
 ```
@@ -291,17 +239,15 @@ streamCompleteListener.remove();
 Listen for incoming stream chunks.
 
 ```ts
-onStreamCancelListener(callback)
+onStreamCancelListener(callback);
 ```
 
 ### Example
 
 ```ts
-const streamCancelListener =
-  onStreamCancelListener(() => {
-
-    console.log("STREAM CANCELLED");
-  });
+const streamCancelListener = onStreamCancelListener(() => {
+  console.log('STREAM CANCELLED');
+});
 
 streamCancelListener.remove();
 ```
@@ -313,19 +259,124 @@ streamCancelListener.remove();
 Listen for incoming stream chunks.
 
 ```ts
-onStreamErrorListener(callback)
+onStreamErrorListener(callback);
 ```
 
 ### Example
 
 ```ts
-const streamErrorListener =
-  onStreamErrorListener(error => {
-
-    console.log(error);
-  });
+const streamErrorListener = onStreamErrorListener((error) => {
+  console.log(error);
+});
 
 streamErrorListener.remove();
+```
+
+---
+
+## startUpload
+
+Starts a background file upload with optional progress tracking and notifications.
+
+```ts
+startUpload(
+  url: string,
+  filePath: string,
+  method: string,
+  headers: Record<string, string>,
+  body: string,
+  enableNotification?: boolean,
+  notificationTitle?: string
+)
+```
+
+### Example
+
+```ts
+import { startUpload } from 'react-native-transferkit';
+
+startUpload(
+  'https://your-api.com/upload',
+  'file:///path/to/large-file.zip',
+  'POST',
+  {
+    'Authorization': 'Bearer token',
+    'Content-Type': 'multipart/form-data',
+  },
+  JSON.stringify({ metadata: 'value' }),
+  true,
+  'Uploading file...'
+);
+```
+
+---
+
+## cancelUpload
+
+Cancels the active file upload.
+
+```ts
+cancelUpload();
+```
+
+---
+
+## onUploadProgressListener
+
+Listen for upload progress updates.
+
+```ts
+onUploadProgressListener(callback);
+```
+
+### Example
+
+```ts
+const progressListener = onUploadProgressListener((event) => {
+  console.log(`Upload progress: ${event.progress}%`);
+});
+
+progressListener.remove();
+```
+
+---
+
+## onUploadCompleteListener
+
+Listen for successful upload completion.
+
+```ts
+onUploadCompleteListener(callback);
+```
+
+### Example
+
+```ts
+const completeListener = onUploadCompleteListener((event) => {
+  console.log('Upload complete', event.response);
+});
+
+completeListener.remove();
+```
+
+---
+
+## onUploadErrorListener
+
+Listen for upload errors.
+
+```ts
+onUploadErrorListener(callback);
+```
+
+### Example
+
+```ts
+const errorListener = onUploadErrorListener((error) => {
+  console.log('Upload failed:', error);
+});
+
+errorListener.remove();
 ```
 
 ---
@@ -334,18 +385,12 @@ streamErrorListener.remove();
 
 ## useTransferStream
 
-Recommended high-level API for React applications.
+Recommended high-level API for React applications (streaming responses).
 
 ### Return Values
 
 ```ts
-const {
-  data,
-  loading,
-  error,
-  start,
-  cancel,
-} = useTransferStream();
+const { data, loading, error, start, cancel } = useTransferStream();
 ```
 
 ---
@@ -358,7 +403,7 @@ start({
   method,
   headers,
   body,
-})
+});
 ```
 
 ### Example
@@ -383,19 +428,97 @@ start({
 Stops the current stream request.
 
 ```ts
-cancel()
+cancel();
+```
+
+---
+
+## useTransferUpload
+
+High-level hook API for background file uploads with progress tracking.
+
+### Return Values
+
+```ts
+const { uploading, progress, error, response, start, cancel } =
+  useTransferUpload();
+```
+
+### start()
+
+```ts
+start({
+  url,
+  filePath,
+  method,
+  headers,
+  body,
+  enableNotification,
+  notificationTitle,
+});
+```
+
+### Example
+
+```tsx
+import { useTransferUpload } from 'react-native-transferkit';
+import { Button, Text, View } from 'react-native';
+
+export default function UploadExample() {
+  const { uploading, progress, error, response, start, cancel } =
+    useTransferUpload();
+
+  return (
+    <View style={{ flex: 1, padding: 20 }}>
+      <Button
+        title="Upload File"
+        onPress={() =>
+          start({
+            url: 'https://your-api.com/upload',
+            filePath: 'file:///path/to/file.pdf',
+            method: 'POST',
+            headers: {
+              Authorization: 'Bearer token',
+            },
+            enableNotification: true,
+            notificationTitle: 'File Upload',
+          })
+        }
+      />
+
+      <Button title="Cancel Upload" onPress={cancel} disabled={!uploading} />
+
+      {uploading && <Text>Upload Progress: {progress}%</Text>}
+
+      {error && <Text>Error: {error}</Text>}
+
+      {response && <Text>Response: {JSON.stringify(response)}</Text>}
+    </View>
+  );
+}
 ```
 
 ---
 
 # 📡 Event Names
 
-| Event | Description |
-|---|---|
-| onStreamData | Stream chunk received |
-| onStreamComplete | Stream completed |
-| onStreamError | Stream failed |
-| onStreamCancel | Stream cancelled |
+## Stream Events
+
+| Event            | Description           |
+| ---------------- | --------------------- |
+| onStreamData     | Stream chunk received |
+| onStreamComplete | Stream completed      |
+| onStreamError    | Stream failed         |
+| onStreamCancel   | Stream cancelled      |
+
+## Upload Events
+
+| Event            | Description                                  |
+| ---------------- | -------------------------------------------- |
+| onUploadProgress | Upload progress update (includes progress %) |
+| onUploadComplete | Upload successfully completed                |
+| onUploadError    | Upload failed                                |
+| onUploadCancel   | Upload cancelled                             |
 
 ---
 
@@ -443,6 +566,7 @@ src/
 - Kotlin
 - OkHttp
 - Turbo Modules
+- Android Notification Service (upload progress)
 
 ## iOS
 
@@ -477,6 +601,8 @@ Built for:
 - AI streaming
 - SSE responses
 - Realtime APIs
+- Background file uploads
+- Upload progress tracking
 - Background networking
 - Large-scale RN applications
 
@@ -484,9 +610,10 @@ Built for:
 
 # 🛣️ Roadmap
 
-- [ ] Background file upload
+- [x] Background file upload
+- [x] Upload progress events
+- [x] Android notifications for upload progress
 - [ ] Background downloads
-- [ ] Upload progress events
 - [ ] SSE parser support
 - [ ] WebSocket support
 - [ ] Retry queues

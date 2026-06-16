@@ -1,5 +1,5 @@
 import { NativeEventEmitter, NativeModules } from 'react-native';
 
-export const streamEmitter = new NativeEventEmitter(
+export const eventEmitter = new NativeEventEmitter(
   NativeModules.TransferkitEventEmitter
 );

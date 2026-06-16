@@ -1,4 +1,5 @@
-import { TurboModuleRegistry, type TurboModule } from 'react-native';
+import type { TurboModule } from 'react-native';
+import { TurboModuleRegistry } from 'react-native';
 
 export interface Spec extends TurboModule {
   startStream(
@@ -9,6 +10,18 @@ export interface Spec extends TurboModule {
   ): void;
 
   cancelStream(): void;
+
+  startBackgroundUpload(
+    url: string,
+    filePath: string,
+    fileName: string,
+    mimeType: string,
+    fieldName: string,
+    method: string,
+    headers: { [key: string]: string }
+  ): void;
+
+  cancelUpload(): void;
 }
 
 export default TurboModuleRegistry.getEnforcing<Spec>('Transferkit');

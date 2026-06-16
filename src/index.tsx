@@ -1,9 +1,2 @@
-export {
-  useTransferStream,
-  startStream,
-  cancelStream,
-  onStreamDataListener,
-  onStreamCompleteListener,
-  onStreamCancelListener,
-  onStreamErrorListener,
-} from './stream';
+export * from './upload';
+export * from './stream';
