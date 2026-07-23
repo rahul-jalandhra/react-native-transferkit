@@ -117,14 +117,14 @@ import { Button, Text, View } from 'react-native';
 import {
   startStream,
   cancelStream,
-  addStreamListener,
+  onStreamDataListener,
 } from 'react-native-transferkit';
 
 export default function App() {
   const [data, setData] = useState('');
 
   useEffect(() => {
-    const listener = addStreamListener((event) => {
+    const listener = onStreamDataListener((event) => {
       setData((prev) => prev + (event.data || ''));
     });
 
@@ -216,7 +216,7 @@ streamDataListener.remove();
 
 ## onStreamCompleteListener
 
-Listen for incoming stream chunks.
+Listen for stream completion.
 
 ```ts
 onStreamCompleteListener(callback);
@@ -236,7 +236,7 @@ streamCompleteListener.remove();
 
 ## onStreamCancelListener
 
-Listen for incoming stream chunks.
+Listen for stream cancellation.
 
 ```ts
 onStreamCancelListener(callback);
@@ -256,7 +256,7 @@ streamCancelListener.remove();
 
 ## onStreamErrorListener
 
-Listen for incoming stream chunks.
+Listen for stream errors.
 
 ```ts
 onStreamErrorListener(callback);
@@ -274,12 +274,12 @@ streamErrorListener.remove();
 
 ---
 
-## startUpload
+## startBackgroundUpload
 
 Starts a background file upload using the current native upload API.
 
 ```ts
-startUpload({
+startBackgroundUpload({
   url: string,
   filePath: string,
   fileName: string,
@@ -293,9 +293,9 @@ startUpload({
 ### Example
 
 ```ts
-import { startUpload } from 'react-native-transferkit';
+import { startBackgroundUpload } from 'react-native-transferkit';
 
-startUpload({
+startBackgroundUpload({
   url: 'https://your-api.com/upload',
   filePath: 'file:///path/to/large-file.zip',
   fileName: 'large-file.zip',
@@ -320,18 +320,18 @@ cancelUpload();
 
 ---
 
-## onUploadProgressListener
+## addUploadProgressListener
 
 Listen for upload progress updates.
 
 ```ts
-onUploadProgressListener(callback);
+addUploadProgressListener(callback);
 ```
 
 ### Example
 
 ```ts
-const progressListener = onUploadProgressListener((event) => {
+const progressListener = addUploadProgressListener((event) => {
   console.log(`Upload progress: ${event.progress}%`);
 });
 
@@ -340,18 +340,18 @@ progressListener.remove();
 
 ---
 
-## onUploadCompleteListener
+## addUploadCompleteListener
 
 Listen for successful upload completion.
 
 ```ts
-onUploadCompleteListener(callback);
+addUploadCompleteListener(callback);
 ```
 
 ### Example
 
 ```ts
-const completeListener = onUploadCompleteListener((event) => {
+const completeListener = addUploadCompleteListener((event) => {
   console.log('Upload complete', event.response);
 });
 
@@ -360,22 +360,42 @@ completeListener.remove();
 
 ---
 
-## onUploadErrorListener
+## addUploadErrorListener
 
 Listen for upload errors.
 
 ```ts
-onUploadErrorListener(callback);
+addUploadErrorListener(callback);
 ```
 
 ### Example
 
 ```ts
-const errorListener = onUploadErrorListener((error) => {
+const errorListener = addUploadErrorListener((error) => {
   console.log('Upload failed:', error);
 });
 
 errorListener.remove();
+```
+
+---
+
+## addUploadCancelListener
+
+Listen for upload cancellation.
+
+```ts
+addUploadCancelListener(callback);
+```
+
+### Example
+
+```ts
+const cancelListener = addUploadCancelListener(() => {
+  console.log('Upload cancelled');
+});
+
+cancelListener.remove();
 ```
 
 ---
@@ -560,11 +580,17 @@ src/
 │
 ├── stream/
 │   ├── hooks/
-│   ├── events/
 │   ├── native/
 │   ├── types/
 │   └── index.ts
 │
+├── upload/
+│   ├── hooks/
+│   ├── native/
+│   ├── types/
+│   └── index.ts
+│
+├── eventEmitter.ts
 ├── NativeTransferkit.ts
 │
 └── index.ts
@@ -628,12 +654,7 @@ Built for:
 - [x] Android notifications for upload progress
 - [ ] Background downloads
 - [ ] SSE parser support
-- [ ] WebSocket support
 - [ ] Retry queues
-- [ ] Resumable uploads
-- [ ] Download manager
-- [ ] Queue system
-- [ ] Offline persistence
 
 ---
 

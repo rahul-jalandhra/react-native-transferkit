@@ -1,12 +1,12 @@
 {
   "name": "react-native-transferkit",
-  "version": "0.1.1",
-  "description": "High-performance background and foreground streaming for React Native on Android and iOS.)High-performance background and foreground streaming for React Native on Android and iOS.",
+  "version": "0.1.2",
+  "description": "High-performance background and foreground streaming for React Native on Android and iOS.",
   "main": "./lib/module/index.js",
   "types": "./lib/typescript/src/index.d.ts",
   "exports": {
     ".": {
-      "source": "./src/index.tsx",
+      "source": "./src/index.ts",
       "types": "./lib/typescript/src/index.d.ts",
       "default": "./lib/module/index.js"
     },
