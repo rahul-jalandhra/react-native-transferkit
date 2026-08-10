@@ -20,6 +20,8 @@ High-performance background and foreground streaming toolkit for React Native on
 - ✅ Turbo Module support
 - ✅ Android + iOS support
 - ✅ Native realtime streaming
+- ✅ Native SSE (Server-Sent Events) line parser & event buffering
+- ✅ AI / LLM streaming hook support (`useSSEStream`)
 - ✅ Event-based stream handling
 - ✅ React hooks support
 - ✅ Lightweight architecture
@@ -97,6 +99,126 @@ export default function App() {
 
       <ScrollView>
         <Text>{data}</Text>
+      </ScrollView>
+    </View>
+  );
+}
+```
+
+## 🤖 AI / SSE Streaming (`useSSEStream`)
+
+Recommended for OpenAI, Claude, Ollama, LangChain, or any Server-Sent Events (SSE) endpoint:
+
+```tsx
+import React from 'react';
+import { Button, ScrollView, Text, View } from 'react-native';
+import { useSSEStream } from 'react-native-transferkit';
+
+export default function AIServerStreamApp() {
+  const { data, loading, error, start, cancel } = useSSEStream({
+    url: 'https://api.openai.com/v1/chat/completions',
+    headers: {
+      Authorization: 'Bearer YOUR_API_KEY',
+    },
+    onEvent: (event) => {
+      console.log('Parsed SSE Event:', event.event, event.data);
+    },
+  });
+
+  return (
+    <View style={{ flex: 1, padding: 20 }}>
+      <Button
+        title="Start AI Completion Stream"
+        onPress={() =>
+          start({
+            method: 'POST',
+            body: JSON.stringify({
+              model: 'gpt-4o',
+              messages: [{ role: 'user', content: 'Explain quantum computing in 2 sentences.' }],
+              stream: true,
+            }),
+          })
+        }
+      />
+
+      <Button title="Stop Stream" onPress={cancel} disabled={!loading} />
+
+      {loading && <Text>Streaming response...</Text>}
+      {error && <Text style={{ color: 'red' }}>{error}</Text>}
+
+      <ScrollView style={{ marginTop: 20 }}>
+        <Text style={{ fontSize: 16 }}>{data}</Text>
+      </ScrollView>
+    </View>
+  );
+}
+```
+
+### `useSSEStream` Hook Reference
+
+```ts
+const {
+  events,    // Array of parsed SSEEvent objects [{ event, data, json, id, retry }]
+  data,      // Accumulated text string (automatically extracted from JSON tokens or raw text)
+  lastEvent, // Most recent parsed SSEEvent object
+  loading,   // Boolean indicating whether stream is active
+  error,     // Error message string if stream fails
+  start,     // Function to trigger SSE stream: start({ url, method, headers, body })
+  cancel,    // Function to abort active stream
+} = useSSEStream(options);
+```
+
+#### JSON Payload Auto-Parsing
+`useSSEStream` automatically attempts to parse stringified JSON SSE payloads (`parsed.json`) and extracts tokens from standard AI/LLM formats (`token`, `content`, `text`, `message`, `delta.content`, `choices[0].delta.content`) so `data` renders clean human-readable text out-of-the-box.
+
+---
+
+# 🧪 Real-Time Testing & Mock Server Setup
+
+You can test streaming and SSE token parsing in real time on an iOS Simulator or Android Emulator using the included mock SSE server:
+
+### 1. Start the Mock SSE Server
+In your terminal from the project root:
+
+```bash
+node example/sse-server.js
+```
+
+This starts an SSE server on `http://localhost:3000/stream-sse` that streams tokens with artificial delays:
+
+```text
+✅ Mock SSE Stream Server is running on http://localhost:3000
+   SSE Endpoint: http://localhost:3000/stream-sse
+   Android Emulator Endpoint: http://10.0.2.2:3000/stream-sse
+```
+
+### 2. Connect from React Native
+
+```tsx
+import React from 'react';
+import { Button, Platform, ScrollView, Text, View } from 'react-native';
+import { useSSEStream } from 'react-native-transferkit';
+
+const SERVER_URL =
+  Platform.OS === 'android'
+    ? 'http://10.0.2.2:3000/stream-sse'
+    : 'http://localhost:3000/stream-sse';
+
+export default function SSEServerTest() {
+  const { data, loading, events, start, cancel } = useSSEStream();
+
+  return (
+    <View style={{ flex: 1, padding: 20 }}>
+      <Button
+        title="Start Mock SSE Stream"
+        onPress={() => start({ url: SERVER_URL })}
+      />
+      <Button title="Stop Stream" onPress={cancel} disabled={!loading} />
+
+      <Text style={{ marginTop: 10 }}>Total Parsed Events: {events.length}</Text>
+
+      <ScrollView style={{ marginTop: 10, padding: 10, backgroundColor: '#f0f0f0' }}>
+        <Text style={{ fontSize: 16 }}>{data}</Text>
       </ScrollView>
     </View>
   );
@@ -652,8 +774,8 @@ Built for:
 - [x] Background file upload
 - [x] Upload progress events
 - [x] Android notifications for upload progress
+- [x] Native SSE line parser & automatic JSON token extraction
 - [ ] Background downloads
-- [ ] SSE parser support
 - [ ] Retry queues
 
 ---

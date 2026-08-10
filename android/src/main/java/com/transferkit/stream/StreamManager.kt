@@ -88,23 +88,51 @@ class StreamManager {
                 }
 
                 val source: BufferedSource = responseBody.source()
-                val buffer = ByteArray(1024)
+                val contentType = response.header("Content-Type") ?: ""
+                val isSSE = contentType.contains("text/event-stream", ignoreCase = true)
 
                 try {
+                    if (isSSE) {
+                        val lineBuffer = StringBuilder()
 
-                    while (true) {
+                        while (true) {
+                            if (isCancelled || call.isCanceled()) break
 
-                        if (isCancelled || call.isCanceled()) break
+                            val line = source.readUtf8Line() ?: break
 
-                        val bytesRead = source.read(buffer)
+                            if (isCancelled || call.isCanceled()) break
 
-                        if (bytesRead == -1) break
+                            if (line.isEmpty()) {
+                                if (lineBuffer.isNotEmpty()) {
+                                    onData(lineBuffer.toString())
+                                    lineBuffer.setLength(0)
+                                }
+                            } else {
+                                if (lineBuffer.isNotEmpty()) {
+                                    lineBuffer.append("\n")
+                                }
+                                lineBuffer.append(line)
+                            }
+                        }
 
-                        if (isCancelled || call.isCanceled()) break
+                        if (lineBuffer.isNotEmpty() && !isCancelled && !call.isCanceled()) {
+                            onData(lineBuffer.toString())
+                            lineBuffer.setLength(0)
+                        }
+                    } else {
+                        val buffer = ByteArray(1024)
 
-                        val chunk = String(buffer, 0, bytesRead)
+                        while (true) {
+                            if (isCancelled || call.isCanceled()) break
 
-                        onData(chunk)
+                            val bytesRead = source.read(buffer)
+                            if (bytesRead == -1) break
+
+                            if (isCancelled || call.isCanceled()) break
+
+                            val chunk = String(buffer, 0, bytesRead)
+                            onData(chunk)
+                        }
                     }
 
                     if (isCancelled || call.isCanceled()) {
