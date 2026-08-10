@@ -1769,7 +1769,7 @@ PODS:
     - React-utils (= 0.85.0)
     - ReactNativeDependencies
   - ReactNativeDependencies (0.85.0)
-  - Transferkit (0.0.2):
+  - Transferkit (0.1.2):
     - hermes-engine
     - RCTRequired
     - RCTTypeSafety
@@ -2098,7 +2098,7 @@ SPEC CHECKSUMS:
   ReactCodegen: b3184a229afd01e7f8058dd81b805b843caa2bf9
   ReactCommon: fe2a3af8975e63efa60f95fca8c34dc85deee360
   ReactNativeDependencies: 5f5a3d7035be919e3d07b35ba9013c58ac9db2a4
-  Transferkit: 27c78ff248c54a35b0db3af8d3d633bcb618b6dd
+  Transferkit: 7b3a2dc14404543de74329556eba5b9504fe0981
   Yoga: cc155241ea30670878e270d52d74cf29487c4bbb
 
 PODFILE CHECKSUM: 572e31871755bb7620be8ba0a0af83200c5c51ad
