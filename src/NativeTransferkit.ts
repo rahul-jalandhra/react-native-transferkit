@@ -12,6 +12,7 @@ export interface Spec extends TurboModule {
   cancelStream(): void;
 
   startBackgroundUpload(
+    taskId: string,
     url: string,
     filePath: string,
     fileName: string,
@@ -21,7 +22,7 @@ export interface Spec extends TurboModule {
     headers: { [key: string]: string }
   ): void;
 
-  cancelUpload(): void;
+  cancelUpload(taskId: string): void;
 }
 
 export default TurboModuleRegistry.getEnforcing<Spec>('Transferkit');

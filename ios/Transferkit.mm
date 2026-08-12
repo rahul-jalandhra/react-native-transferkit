@@ -6,7 +6,7 @@
 
 @implementation Transferkit
 
-RCT_EXPORT_MODULE(Transferkit)
+RCT_EXPORT_MODULE()
 
 - (void)startStream:(NSString *)url
              method:(NSString *)method
@@ -26,7 +26,8 @@ RCT_EXPORT_MODULE(Transferkit)
         cancelStream];
 }
 
-- (void)startBackgroundUpload:(NSString *)url
+- (void)startBackgroundUpload:(NSString *)taskId
+                          url:(NSString *)url
                      filePath:(NSString *)filePath
                      fileName:(NSString *)fileName
                      mimeType:(NSString *)mimeType
@@ -35,7 +36,8 @@ RCT_EXPORT_MODULE(Transferkit)
                       headers:(NSDictionary *)headers
 {
     [[TKUploadManager shared]
-        startUpload:url
+        startUpload:taskId
+        url:url
         filePath:filePath
         fileName:fileName
         mimeType:mimeType
@@ -44,17 +46,18 @@ RCT_EXPORT_MODULE(Transferkit)
         headers:headers];
 }
 
-- (void)cancelUpload
+- (void)cancelUpload:(NSString *)taskId
 {
     [[TKUploadManager shared]
-        cancelUpload];
+        cancelUpload:taskId];
 }
 
+#ifdef RCT_NEW_ARCH_ENABLED
 - (std::shared_ptr<facebook::react::TurboModule>)getTurboModule:
-(const facebook::react::ObjCTurboModule::InitParams &)params
+    (const facebook::react::ObjCTurboModule::InitParams &)params
 {
-    return std::make_shared<
-        facebook::react::NativeTransferkitSpecJSI>(params);
+    return std::make_shared<facebook::react::NativeTransferkitSpecJSI>(params);
 }
+#endif
 
 @end
