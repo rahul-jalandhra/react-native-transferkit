@@ -5,7 +5,8 @@
 @interface TKUploadManager ()
 
 @property(nonatomic, strong) NSURLSession *session;
-@property(nonatomic, strong) NSURLSessionUploadTask *uploadTask;
+@property(nonatomic, strong) NSMutableDictionary<NSString *, NSURLSessionUploadTask *> *tasksMap;
+@property(nonatomic, strong) NSMutableDictionary<NSNumber *, NSString *> *taskIdsMap;
 
 @end
 
@@ -14,13 +15,10 @@
 + (instancetype)shared
 {
     static TKUploadManager *sharedInstance = nil;
-
     static dispatch_once_t onceToken;
 
     dispatch_once(&onceToken, ^{
-
-        sharedInstance =
-            [[TKUploadManager alloc] init];
+        sharedInstance = [[TKUploadManager alloc] init];
     });
 
     return sharedInstance;
@@ -29,24 +27,21 @@
 - (instancetype)init
 {
     self = [super init];
-
     if (self) {
-
         NSURLSessionConfiguration *config =
             [NSURLSessionConfiguration
-                backgroundSessionConfigurationWithIdentifier:
-                    @"com.transferkit.upload"];
+                backgroundSessionConfigurationWithIdentifier:@"com.transferkit.upload"];
 
-        self.session =
-            [NSURLSession sessionWithConfiguration:config
-                                          delegate:self
-                                     delegateQueue:nil];
+        self.session = [NSURLSession sessionWithConfiguration:config delegate:self delegateQueue:nil];
+        self.tasksMap = [NSMutableDictionary dictionary];
+        self.taskIdsMap = [NSMutableDictionary dictionary];
     }
 
     return self;
 }
 
-- (void)startUpload:(NSString *)url
+- (void)startUpload:(NSString *)taskId
+                url:(NSString *)url
            filePath:(NSString *)filePath
            fileName:(NSString *)fileName
            mimeType:(NSString *)mimeType
@@ -54,180 +49,155 @@
              method:(NSString *)method
             headers:(NSDictionary *)headers
 {
+    NSString *safeTaskId = taskId.length > 0 ? taskId : [[NSUUID UUID] UUIDString];
 
-    NSURL *requestURL =
-        [NSURL URLWithString:url];
-
+    NSURL *requestURL = [NSURL URLWithString:url];
     if (!requestURL) {
-
         NSLog(@"Invalid upload URL");
-
         [[NSNotificationCenter defaultCenter]
             postNotificationName:TransferkitUploadErrorNotification
                           object:nil
                         userInfo:@{
+                            @"taskId": safeTaskId,
                             @"error": @"Invalid upload URL"
                         }];
-
         return;
     }
 
     NSURL *fileURL = [NSURL URLWithString:filePath];
-
     if (!fileURL || !fileURL.scheme) {
         fileURL = [NSURL fileURLWithPath:filePath];
     }
-
     if (![fileURL isFileURL]) {
         fileURL = [NSURL fileURLWithPath:fileURL.path];
     }
 
-    if (![[NSFileManager defaultManager]
-          fileExistsAtPath:fileURL.path]) {
-
+    if (![[NSFileManager defaultManager] fileExistsAtPath:fileURL.path]) {
         NSLog(@"File does not exist: %@", fileURL);
-
         [[NSNotificationCenter defaultCenter]
             postNotificationName:TransferkitUploadErrorNotification
                           object:nil
                         userInfo:@{
+                            @"taskId": safeTaskId,
                             @"error": @"File does not exist"
                         }];
-
         return;
     }
 
-    NSString *boundary =
-        [NSString stringWithFormat:
-            @"Boundary-%@",
-            [[NSUUID UUID] UUIDString]];
-
-    NSMutableURLRequest *request =
-        [NSMutableURLRequest requestWithURL:requestURL];
-
+    NSString *boundary = [NSString stringWithFormat:@"Boundary-%@", [[NSUUID UUID] UUIDString]];
+    NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:requestURL];
     request.HTTPMethod = method;
 
-    NSString *contentType =
-        [NSString stringWithFormat:
-            @"multipart/form-data; boundary=%@",
-            boundary];
-
-    [request setValue:contentType
-   forHTTPHeaderField:@"Content-Type"];
+    NSString *contentType = [NSString stringWithFormat:@"multipart/form-data; boundary=%@", boundary];
+    [request setValue:contentType forHTTPHeaderField:@"Content-Type"];
 
     for (NSString *key in headers) {
-
-        [request setValue:headers[key]
-       forHTTPHeaderField:key];
+        [request setValue:headers[key] forHTTPHeaderField:key];
     }
 
-    NSString *tempFilePath =
-        [NSTemporaryDirectory()
-            stringByAppendingPathComponent:
-                [NSString stringWithFormat:
-                    @"upload-%@.tmp",
-                    [[NSUUID UUID] UUIDString]]];
+    NSString *tempFilePath = [NSTemporaryDirectory()
+        stringByAppendingPathComponent:[NSString stringWithFormat:@"upload-%@.tmp", [[NSUUID UUID] UUIDString]]];
+    NSURL *tempFileURL = [NSURL fileURLWithPath:tempFilePath];
 
-    NSURL *tempFileURL =
-        [NSURL fileURLWithPath:tempFilePath];
+    NSMutableData *body = [NSMutableData data];
+    NSString *disposition = [NSString stringWithFormat:
+        @"--%@\r\n"
+        "Content-Disposition: form-data; name=\"%@\"; filename=\"%@\"\r\n"
+        "Content-Type: %@\r\n\r\n",
+        boundary, fieldName, fileName, mimeType];
 
-    NSMutableData *body =
-        [NSMutableData data];
+    [body appendData:[disposition dataUsingEncoding:NSUTF8StringEncoding]];
 
-    NSString *disposition =
-        [NSString stringWithFormat:
-            @"--%@\r\n"
-            "Content-Disposition: form-data; "
-            "name=\"%@\"; filename=\"%@\"\r\n"
-            "Content-Type: %@\r\n\r\n",
-            boundary,
-            fieldName,
-            fileName,
-            mimeType];
-
-    [body appendData:
-        [disposition
-            dataUsingEncoding:NSUTF8StringEncoding]];
-
-    NSData *fileData =
-        [NSData dataWithContentsOfURL:fileURL];
-
+    NSData *fileData = [NSData dataWithContentsOfURL:fileURL];
     if (!fileData) {
         NSLog(@"Unable to read file at URL: %@", fileURL);
-
         [[NSNotificationCenter defaultCenter]
             postNotificationName:TransferkitUploadErrorNotification
                           object:nil
                         userInfo:@{
+                            @"taskId": safeTaskId,
                             @"error": @"Unable to read upload file"
                         }];
-
         return;
     }
 
     [body appendData:fileData];
-
-    NSString *closingBoundary =
-        [NSString stringWithFormat:
-            @"\r\n--%@--\r\n",
-            boundary];
-
-    [body appendData:
-        [closingBoundary
-            dataUsingEncoding:NSUTF8StringEncoding]];
+    NSString *closingBoundary = [NSString stringWithFormat:@"\r\n--%@--\r\n", boundary];
+    [body appendData:[closingBoundary dataUsingEncoding:NSUTF8StringEncoding]];
 
     [body writeToURL:tempFileURL atomically:YES];
 
-    self.uploadTask =
-        [self.session
-            uploadTaskWithRequest:request
-                         fromFile:tempFileURL];
+    NSURLSessionUploadTask *task = [self.session uploadTaskWithRequest:request fromFile:tempFileURL];
 
-    [self.uploadTask resume];
+    @synchronized (self) {
+        self.tasksMap[safeTaskId] = task;
+        self.taskIdsMap[@(task.taskIdentifier)] = safeTaskId;
+    }
 
-    NSLog(@"Background upload started");
+    [task resume];
+    NSLog(@"Background upload started for taskId: %@", safeTaskId);
 }
 
-- (void)cancelUpload
+- (void)cancelUpload:(NSString *)taskId
 {
-    if (self.uploadTask) {
+    @synchronized (self) {
+        if (taskId && taskId.length > 0) {
+            NSURLSessionUploadTask *task = self.tasksMap[taskId];
+            if (task) {
+                [task cancel];
+                [self.tasksMap removeObjectForKey:taskId];
+                [self.taskIdsMap removeObjectForKey:@(task.taskIdentifier)];
+            }
 
-        [self.uploadTask cancel];
+            [[NSNotificationCenter defaultCenter]
+                postNotificationName:TransferkitUploadCancelNotification
+                              object:nil
+                            userInfo:@{
+                                @"taskId": taskId,
+                                @"success": @YES
+                            }];
+        } else {
+            for (NSString *key in [self.tasksMap allKeys]) {
+                NSURLSessionUploadTask *task = self.tasksMap[key];
+                [task cancel];
+            }
+            [self.tasksMap removeAllObjects];
+            [self.taskIdsMap removeAllObjects];
 
-        self.uploadTask = nil;
-
-        [[NSNotificationCenter defaultCenter]
-            postNotificationName:TransferkitUploadCancelNotification
-                          object:nil
-                        userInfo:@{
-                            @"success": @YES
-                        }];
+            [[NSNotificationCenter defaultCenter]
+                postNotificationName:TransferkitUploadCancelNotification
+                              object:nil
+                            userInfo:@{
+                                @"taskId": @"",
+                                @"success": @YES
+                            }];
+        }
     }
 }
-
 
 #pragma mark - Upload Progress
 
 - (void)URLSession:(NSURLSession *)session
               task:(NSURLSessionTask *)task
-didSendBodyData:(int64_t)bytesSent
- totalBytesSent:(int64_t)totalBytesSent
-totalBytesExpectedToSend:(int64_t)
-totalBytesExpectedToSend
+   didSendBodyData:(int64_t)bytesSent
+    totalBytesSent:(int64_t)totalBytesSent
+totalBytesExpectedToSend:(int64_t)totalBytesExpectedToSend
 {
+    NSString *taskId = @"";
+    @synchronized (self) {
+        taskId = self.taskIdsMap[@(task.taskIdentifier)] ?: @"";
+    }
 
-    double progress =
-        (double)totalBytesSent /
-        (double)totalBytesExpectedToSend;
+    double progress = (double)totalBytesSent / (double)totalBytesExpectedToSend;
 
     [[NSNotificationCenter defaultCenter]
         postNotificationName:TransferkitUploadProgressNotification
                       object:nil
                     userInfo:@{
+                        @"taskId": taskId,
                         @"progress": @(progress)
                     }];
 }
-
 
 #pragma mark - Upload Completion
 
@@ -235,58 +205,49 @@ totalBytesExpectedToSend
               task:(NSURLSessionTask *)task
 didCompleteWithError:(NSError *)error
 {
+    NSString *taskId = @"";
+    @synchronized (self) {
+        taskId = self.taskIdsMap[@(task.taskIdentifier)] ?: @"";
+        if (taskId.length > 0) {
+            [self.tasksMap removeObjectForKey:taskId];
+            [self.taskIdsMap removeObjectForKey:@(task.taskIdentifier)];
+        }
+    }
 
-    NSHTTPURLResponse *httpResponse =
-        (NSHTTPURLResponse *)task.response;
-
-    if (httpResponse &&
-        (httpResponse.statusCode < 200 ||
-         httpResponse.statusCode >= 300)) {
-
-        NSString *statusMessage =
-            [NSString stringWithFormat:
-                @"Upload failed with status code %ld",
-                (long)httpResponse.statusCode];
-
-        NSLog(@"%@", statusMessage);
+    NSHTTPURLResponse *httpResponse = (NSHTTPURLResponse *)task.response;
+    if (httpResponse && (httpResponse.statusCode < 200 || httpResponse.statusCode >= 300)) {
+        NSString *statusMessage = [NSString stringWithFormat:@"Upload failed with status code %ld", (long)httpResponse.statusCode];
 
         [[NSNotificationCenter defaultCenter]
             postNotificationName:TransferkitUploadErrorNotification
                           object:nil
                         userInfo:@{
+                            @"taskId": taskId,
                             @"error": statusMessage,
                             @"statusCode": @(httpResponse.statusCode)
                         }];
-
-        self.uploadTask = nil;
         return;
     }
 
     if (error) {
-
-        NSLog(@"Upload Error: %@",
-              error.localizedDescription);
-
+        NSLog(@"Upload Error: %@", error.localizedDescription);
         [[NSNotificationCenter defaultCenter]
             postNotificationName:TransferkitUploadErrorNotification
                           object:nil
                         userInfo:@{
+                            @"taskId": taskId,
                             @"error": error.localizedDescription
                         }];
-
     } else {
-
-        NSLog(@"Upload Complete");
-
+        NSLog(@"Upload Complete for taskId: %@", taskId);
         [[NSNotificationCenter defaultCenter]
             postNotificationName:TransferkitUploadCompleteNotification
                           object:nil
                         userInfo:@{
+                            @"taskId": taskId,
                             @"success": @YES
                         }];
     }
-
-    self.uploadTask = nil;
 }
 
 @end

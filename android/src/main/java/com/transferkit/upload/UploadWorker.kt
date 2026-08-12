@@ -32,8 +32,9 @@ class UploadWorker(
     private val client = OkHttpClient()
 
     override suspend fun doWork(): Result {
-        val url = inputData.getString(KEY_URL) ?: return failure("Missing upload URL")
-        val filePath = inputData.getString(KEY_FILE_PATH) ?: return failure("Missing file path")
+        val taskId = inputData.getString(KEY_TASK_ID) ?: ""
+        val url = inputData.getString(KEY_URL) ?: return failure("", "Missing upload URL")
+        val filePath = inputData.getString(KEY_FILE_PATH) ?: return failure(taskId, "Missing file path")
         val fileName = inputData.getString(KEY_FILE_NAME) ?: "upload"
         val mimeType = inputData.getString(KEY_MIME_TYPE) ?: "application/octet-stream"
         val fieldName = inputData.getString(KEY_FIELD_NAME) ?: "file"
@@ -41,7 +42,7 @@ class UploadWorker(
         val headersJson = inputData.getString(KEY_HEADERS)
 
         val file = resolveFile(filePath, fileName)
-            ?: return failure("Unable to resolve upload file")
+            ?: return failure(taskId, "Unable to resolve upload file")
 
         setForegroundAsync(createForegroundInfo(0.0, "Upload starting"))
 
@@ -53,7 +54,7 @@ class UploadWorker(
             val safeProgress = progress.coerceIn(0.0, 1.0)
             setProgressAsync(workDataOf(KEY_PROGRESS to safeProgress))
             updateNotification(safeProgress)
-            sendBroadcast(EVENT_PROGRESS, progress = safeProgress)
+            sendBroadcast(EVENT_PROGRESS, taskId, progress = safeProgress)
         }
 
         val multipartBody = MultipartBody.Builder()
@@ -75,17 +76,17 @@ class UploadWorker(
             client.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) {
                     val message = "Upload failed with HTTP ${response.code}"
-                    sendBroadcast(EVENT_ERROR, error = message)
+                    sendBroadcast(EVENT_ERROR, taskId, error = message)
                     updateNotification(1.0, "Upload failed")
                     return Result.failure()
                 }
 
-                sendBroadcast(EVENT_COMPLETE)
+                sendBroadcast(EVENT_COMPLETE, taskId)
                 updateNotification(1.0, "Upload complete")
                 Result.success()
             }
         } catch (exception: Exception) {
-            sendBroadcast(EVENT_ERROR, error = exception.localizedMessage ?: "Upload failed")
+            sendBroadcast(EVENT_ERROR, taskId, error = exception.localizedMessage ?: "Upload failed")
             updateNotification(1.0, "Upload failed")
             if (runAttemptCount > 0) {
                 Result.failure()
@@ -95,8 +96,8 @@ class UploadWorker(
         }
     }
 
-    private fun failure(message: String): Result {
-        sendBroadcast(EVENT_ERROR, error = message)
+    private fun failure(taskId: String, message: String): Result {
+        sendBroadcast(EVENT_ERROR, taskId, error = message)
         updateNotification(1.0, "Upload failed")
         return Result.failure()
     }
@@ -126,12 +127,14 @@ class UploadWorker(
 
     private fun sendBroadcast(
         event: String,
+        taskId: String = "",
         progress: Double? = null,
         error: String? = null
     ) {
         val intent = Intent(ACTION_UPLOAD_BROADCAST).apply {
             `package` = applicationContext.packageName
             putExtra(EXTRA_EVENT, event)
+            putExtra(EXTRA_TASK_ID, taskId)
             progress?.let { putExtra(EXTRA_PROGRESS, it) }
             error?.let { putExtra(EXTRA_ERROR, it) }
         }
@@ -172,6 +175,7 @@ class UploadWorker(
         const val CHANNEL_NAME = "Upload progress"
         const val ACTION_UPLOAD_BROADCAST = "com.transferkit.upload.ACTION_UPLOAD_BROADCAST"
         const val EXTRA_EVENT = "extra_upload_event"
+        const val EXTRA_TASK_ID = "extra_upload_task_id"
         const val EXTRA_PROGRESS = "extra_upload_progress"
         const val EXTRA_ERROR = "extra_upload_error"
 
@@ -181,6 +185,7 @@ class UploadWorker(
         const val EVENT_CANCEL = "cancel"
 
         const val NOTIFICATION_ID = 1
+        const val KEY_TASK_ID = "key_upload_task_id"
         const val KEY_URL = "key_upload_url"
         const val KEY_FILE_PATH = "key_upload_file_path"
         const val KEY_FILE_NAME = "key_upload_file_name"

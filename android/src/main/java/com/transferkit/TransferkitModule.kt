@@ -60,6 +60,7 @@ class TransferkitModule(
     }
 
     override fun startBackgroundUpload(
+        taskId: String,
         url: String,
         filePath: String,
         fileName: String,
@@ -77,6 +78,7 @@ class TransferkitModule(
         }
 
         uploadManager.startUpload(
+            taskId = taskId,
             url = url,
             filePath = filePath,
             fileName = fileName,
@@ -86,29 +88,33 @@ class TransferkitModule(
             headers = headersMap,
             onProgress = { progress ->
                 val params: WritableMap = Arguments.createMap()
+                params.putString("taskId", taskId)
                 params.putDouble("progress", progress)
                 sendEvent("onUploadProgress", params)
             },
             onComplete = {
                 sendEvent("onUploadComplete", Arguments.createMap().apply {
+                    putString("taskId", taskId)
                     putBoolean("success", true)
                 })
             },
             onError = { error ->
                 sendEvent("onUploadError", Arguments.createMap().apply {
+                    putString("taskId", taskId)
                     putString("error", error)
                 })
             },
             onCancel = {
                 sendEvent("onUploadCancel", Arguments.createMap().apply {
+                    putString("taskId", taskId)
                     putBoolean("success", true)
                 })
             }
         )
     }
 
-    override fun cancelUpload() {
-        uploadManager.cancelUpload()
+    override fun cancelUpload(taskId: String) {
+        uploadManager.cancelUpload(taskId)
     }
 
     private fun sendEvent(

@@ -5,6 +5,7 @@
 High-performance background and foreground streaming toolkit for React Native on Android and iOS.
 
 <p align="center">
+  <img alt="npm version" src="https://img.shields.io/badge/version-0.3.0-blue.svg" />
   <img alt="platforms" src="https://img.shields.io/badge/platforms-android%20%7C%20ios-blue.svg" />
   <img alt="react-native" src="https://img.shields.io/badge/react--native-0.79+-brightgreen.svg" />
   <img alt="architecture" src="https://img.shields.io/badge/new--architecture-enabled-success.svg" />
@@ -22,14 +23,15 @@ High-performance background and foreground streaming toolkit for React Native on
 - ✅ Native realtime streaming
 - ✅ Native SSE (Server-Sent Events) line parser & event buffering
 - ✅ AI / LLM streaming hook support (`useSSEStream`)
+- ✅ Multi-Task Upload Management (`taskId` support)
+- ✅ Parallel background file uploads (`useMultiBackgroundUpload`)
 - ✅ Event-based stream handling
 - ✅ React hooks support
 - ✅ Lightweight architecture
 - ✅ Minimal dependencies
 - ✅ Scalable SDK structure
-- ✅ Stream cancellation support
-- ✅ Background file uploads
-- ✅ Upload progress tracking
+- ✅ Stream & Task cancellation support
+- ✅ Background file uploads with progress tracking
 - ✅ Android notifications for upload progress
 
 ---
@@ -648,6 +650,63 @@ export default function UploadExample() {
       {completed && <Text>Upload complete</Text>}
       {cancelled && <Text>Upload cancelled</Text>}
       {error && <Text>Error: {error}</Text>}
+    </View>
+  );
+}
+```
+
+---
+
+## 📤 Multi-Task Background Uploads (`useMultiBackgroundUpload`)
+
+Upload multiple files concurrently in the background with individual task tracking & targeted cancellation:
+
+```tsx
+import React from 'react';
+import { Button, Text, View, ScrollView } from 'react-native';
+import { useMultiBackgroundUpload } from 'react-native-transferkit';
+
+export default function ParallelUploadExample() {
+  const { uploadList, uploadMap, startUploads, cancelSingleUpload, cancelAll } = useMultiBackgroundUpload();
+
+  const handleUploadBatch = () => {
+    startUploads([
+      {
+        taskId: 'file-1',
+        url: 'https://your-api.com/upload',
+        filePath: 'file:///path/photo1.jpg',
+        fileName: 'photo1.jpg',
+        mimeType: 'image/jpeg',
+        fieldName: 'file',
+      },
+      {
+        taskId: 'file-2',
+        url: 'https://your-api.com/upload',
+        filePath: 'file:///path/photo2.jpg',
+        fileName: 'photo2.jpg',
+        mimeType: 'image/jpeg',
+        fieldName: 'file',
+      },
+    ]);
+  };
+
+  return (
+    <View style={{ flex: 1, padding: 20 }}>
+      <Button title="Upload All Files Concurrently" onPress={handleUploadBatch} />
+      <Button title="Cancel All Uploads" onPress={cancelAll} />
+
+      <ScrollView style={{ marginTop: 20 }}>
+        {uploadList.map((item) => (
+          <View key={item.taskId} style={{ marginBottom: 15, padding: 10, backgroundColor: '#f0f0f0' }}>
+            <Text>{item.fileName}: {Math.round(item.progress * 100)}%</Text>
+            {item.loading && (
+              <Button title="Cancel Item" onPress={() => cancelSingleUpload(item.taskId)} />
+            )}
+            {item.completed && <Text style={{ color: 'green' }}>Complete</Text>}
+            {item.error && <Text style={{ color: 'red' }}>Error: {item.error}</Text>}
+          </View>
+        ))}
+      </ScrollView>
     </View>
   );
 }

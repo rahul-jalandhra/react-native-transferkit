@@ -8,7 +8,8 @@
 
 + (instancetype)shared;
 
-- (void)startUpload:(NSString *)url
+- (void)startUpload:(NSString *)taskId
+                url:(NSString *)url
            filePath:(NSString *)filePath
            fileName:(NSString *)fileName
            mimeType:(NSString *)mimeType
@@ -16,6 +17,6 @@
              method:(NSString *)method
             headers:(NSDictionary *)headers;
 
-- (void)cancelUpload;
+- (void)cancelUpload:(NSString *)taskId;
 
 @end

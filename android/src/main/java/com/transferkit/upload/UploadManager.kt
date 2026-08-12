@@ -14,12 +14,13 @@ class UploadManager(private val context: Context) {
 
     private val workManager = WorkManager.getInstance(context)
     private var uploadReceiver: BroadcastReceiver? = null
-    private var progressCallback: ((Double) -> Unit)? = null
-    private var completeCallback: (() -> Unit)? = null
-    private var errorCallback: ((String) -> Unit)? = null
-    private var cancelCallback: (() -> Unit)? = null
+    private val progressCallbacks = java.util.concurrent.ConcurrentHashMap<String, (Double) -> Unit>()
+    private val completeCallbacks = java.util.concurrent.ConcurrentHashMap<String, () -> Unit>()
+    private val errorCallbacks = java.util.concurrent.ConcurrentHashMap<String, (String) -> Unit>()
+    private val cancelCallbacks = java.util.concurrent.ConcurrentHashMap<String, () -> Unit>()
 
     fun startUpload(
+        taskId: String,
         url: String,
         filePath: String,
         fileName: String,
@@ -32,10 +33,12 @@ class UploadManager(private val context: Context) {
         onError: (String) -> Unit,
         onCancel: () -> Unit
     ) {
-        this.progressCallback = onProgress
-        this.completeCallback = onComplete
-        this.errorCallback = onError
-        this.cancelCallback = onCancel
+        if (taskId.isNotEmpty()) {
+            progressCallbacks[taskId] = onProgress
+            completeCallbacks[taskId] = onComplete
+            errorCallbacks[taskId] = onError
+            cancelCallbacks[taskId] = onCancel
+        }
 
         registerReceiver()
 
@@ -44,6 +47,7 @@ class UploadManager(private val context: Context) {
         }
 
         val inputData = androidx.work.Data.Builder()
+            .putString(UploadWorker.KEY_TASK_ID, taskId)
             .putString(UploadWorker.KEY_URL, url)
             .putString(UploadWorker.KEY_FILE_PATH, filePath)
             .putString(UploadWorker.KEY_FILE_NAME, fileName)
@@ -57,16 +61,35 @@ class UploadManager(private val context: Context) {
             .setInputData(inputData)
             .build()
 
+        val workName = if (taskId.isNotEmpty()) "${UploadWorker.UPLOAD_WORK_NAME}_$taskId" else UploadWorker.UPLOAD_WORK_NAME
+
         workManager.enqueueUniqueWork(
-            UploadWorker.UPLOAD_WORK_NAME,
+            workName,
             ExistingWorkPolicy.REPLACE,
             request
         )
     }
 
-    fun cancelUpload() {
-        workManager.cancelUniqueWork(UploadWorker.UPLOAD_WORK_NAME)
-        unregisterReceiver()
+    fun cancelUpload(taskId: String) {
+        if (taskId.isNotEmpty()) {
+            val workName = "${UploadWorker.UPLOAD_WORK_NAME}_$taskId"
+            workManager.cancelUniqueWork(workName)
+            cancelCallbacks[taskId]?.invoke()
+            removeCallbacks(taskId)
+        } else {
+            workManager.cancelUniqueWork(UploadWorker.UPLOAD_WORK_NAME)
+            unregisterReceiver()
+        }
+    }
+
+    private fun removeCallbacks(taskId: String) {
+        progressCallbacks.remove(taskId)
+        completeCallbacks.remove(taskId)
+        errorCallbacks.remove(taskId)
+        cancelCallbacks.remove(taskId)
+        if (progressCallbacks.isEmpty() && completeCallbacks.isEmpty() && errorCallbacks.isEmpty() && cancelCallbacks.isEmpty()) {
+            unregisterReceiver()
+        }
     }
 
     private fun registerReceiver() {
@@ -77,23 +100,43 @@ class UploadManager(private val context: Context) {
         uploadReceiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) {
                 val event = intent.getStringExtra(UploadWorker.EXTRA_EVENT) ?: return
+                val taskId = intent.getStringExtra(UploadWorker.EXTRA_TASK_ID) ?: ""
                 when (event) {
                     UploadWorker.EVENT_PROGRESS -> {
                         val progress = intent.getDoubleExtra(UploadWorker.EXTRA_PROGRESS, 0.0)
-                        progressCallback?.invoke(progress)
+                        if (taskId.isNotEmpty()) {
+                            progressCallbacks[taskId]?.invoke(progress)
+                        } else {
+                            progressCallbacks.values.forEach { it.invoke(progress) }
+                        }
                     }
                     UploadWorker.EVENT_COMPLETE -> {
-                        completeCallback?.invoke()
-                        unregisterReceiver()
+                        if (taskId.isNotEmpty()) {
+                            completeCallbacks[taskId]?.invoke()
+                            removeCallbacks(taskId)
+                        } else {
+                            completeCallbacks.values.forEach { it.invoke() }
+                            unregisterReceiver()
+                        }
                     }
                     UploadWorker.EVENT_ERROR -> {
                         val error = intent.getStringExtra(UploadWorker.EXTRA_ERROR) ?: "Unknown upload error"
-                        errorCallback?.invoke(error)
-                        unregisterReceiver()
+                        if (taskId.isNotEmpty()) {
+                            errorCallbacks[taskId]?.invoke(error)
+                            removeCallbacks(taskId)
+                        } else {
+                            errorCallbacks.values.forEach { it.invoke(error) }
+                            unregisterReceiver()
+                        }
                     }
                     UploadWorker.EVENT_CANCEL -> {
-                        cancelCallback?.invoke()
-                        unregisterReceiver()
+                        if (taskId.isNotEmpty()) {
+                            cancelCallbacks[taskId]?.invoke()
+                            removeCallbacks(taskId)
+                        } else {
+                            cancelCallbacks.values.forEach { it.invoke() }
+                            unregisterReceiver()
+                        }
                     }
                 }
             }
