@@ -5,7 +5,7 @@
 High-performance background and foreground streaming toolkit for React Native on Android and iOS.
 
 <p align="center">
-  <img alt="npm version" src="https://img.shields.io/badge/version-0.3.0-blue.svg" />
+  <img alt="npm version" src="https://img.shields.io/badge/version-0.4.0-blue.svg" />
   <img alt="platforms" src="https://img.shields.io/badge/platforms-android%20%7C%20ios-blue.svg" />
   <img alt="react-native" src="https://img.shields.io/badge/react--native-0.79+-brightgreen.svg" />
   <img alt="architecture" src="https://img.shields.io/badge/new--architecture-enabled-success.svg" />
@@ -56,6 +56,41 @@ Install CocoaPods dependencies:
 
 ```bash
 cd ios && pod install
+```
+
+### Background Upload Support (Optional)
+
+If you use background uploads (`useBackgroundUpload` / `useMultiBackgroundUpload`), add the following to your app's `AppDelegate` so that uploads can complete while the app is suspended:
+
+**Swift** (`AppDelegate.swift`):
+
+```swift
+import Transferkit
+
+func application(
+    _ application: UIApplication,
+    handleEventsForBackgroundURLSession identifier: String,
+    completionHandler: @escaping () -> Void
+) {
+    if identifier == "com.transferkit.upload" {
+        TKUploadManager.handleBackgroundSessionCompletionHandler(completionHandler)
+    }
+}
+```
+
+**Objective-C** (`AppDelegate.m` / `AppDelegate.mm`):
+
+```objc
+#import <TKUploadManager.h>
+
+- (void)application:(UIApplication *)application
+    handleEventsForBackgroundURLSession:(NSString *)identifier
+                      completionHandler:(void (^)(void))completionHandler
+{
+    if ([identifier isEqualToString:@"com.transferkit.upload"]) {
+        [TKUploadManager handleBackgroundSessionCompletionHandler:completionHandler];
+    }
+}
 ```
 
 ---
@@ -785,6 +820,7 @@ src/
 
 - Kotlin
 - OkHttp
+- WorkManager (background uploads)
 - Turbo Modules
 - Android Notification Service (upload progress)
 

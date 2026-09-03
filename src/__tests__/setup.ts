@@ -14,6 +14,10 @@ jest.mock('react-native', () => ({
   NativeModules: {
     TransferkitEventEmitter: {},
   },
+  Platform: {
+    OS: 'ios',
+    select: jest.fn((dict: any) => dict?.ios),
+  },
   TurboModuleRegistry: {
     getEnforcing: jest.fn().mockReturnValue(mockTransferkitSpec),
   },

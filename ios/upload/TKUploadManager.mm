@@ -2,11 +2,16 @@
 
 #import "../events/TransferkitEventEmitter.h"
 
+static const NSUInteger kStreamBufferSize = 256 * 1024; // 256 KB chunks
+
+static void (^_backgroundCompletionHandler)(void) = nil;
+
 @interface TKUploadManager ()
 
 @property(nonatomic, strong) NSURLSession *session;
 @property(nonatomic, strong) NSMutableDictionary<NSString *, NSURLSessionUploadTask *> *tasksMap;
 @property(nonatomic, strong) NSMutableDictionary<NSNumber *, NSString *> *taskIdsMap;
+@property(nonatomic, strong) NSMutableDictionary<NSString *, NSURL *> *tempFilesMap;
 
 @end
 
@@ -24,6 +29,14 @@
     return sharedInstance;
 }
 
++ (void)handleBackgroundSessionCompletionHandler:(void (^)(void))completionHandler
+{
+    _backgroundCompletionHandler = [completionHandler copy];
+    // Accessing [self shared] ensures the session is recreated with its delegate
+    // so that pending delegate messages are delivered.
+    (void)[TKUploadManager shared];
+}
+
 - (instancetype)init
 {
     self = [super init];
@@ -35,6 +48,7 @@
         self.session = [NSURLSession sessionWithConfiguration:config delegate:self delegateQueue:nil];
         self.tasksMap = [NSMutableDictionary dictionary];
         self.taskIdsMap = [NSMutableDictionary dictionary];
+        self.tempFilesMap = [NSMutableDictionary dictionary];
     }
 
     return self;
@@ -95,22 +109,19 @@
         [request setValue:headers[key] forHTTPHeaderField:key];
     }
 
+    // Build multipart body by streaming to a temp file (avoids loading entire file into RAM)
     NSString *tempFilePath = [NSTemporaryDirectory()
         stringByAppendingPathComponent:[NSString stringWithFormat:@"upload-%@.tmp", [[NSUUID UUID] UUIDString]]];
     NSURL *tempFileURL = [NSURL fileURLWithPath:tempFilePath];
 
-    NSMutableData *body = [NSMutableData data];
-    NSString *disposition = [NSString stringWithFormat:
-        @"--%@\r\n"
-        "Content-Disposition: form-data; name=\"%@\"; filename=\"%@\"\r\n"
-        "Content-Type: %@\r\n\r\n",
-        boundary, fieldName, fileName, mimeType];
-
-    [body appendData:[disposition dataUsingEncoding:NSUTF8StringEncoding]];
-
-    NSData *fileData = [NSData dataWithContentsOfURL:fileURL];
-    if (!fileData) {
-        NSLog(@"Unable to read file at URL: %@", fileURL);
+    BOOL writeSuccess = [self writeMultipartBodyToFile:tempFileURL
+                                             fileURL:fileURL
+                                           fieldName:fieldName
+                                            fileName:fileName
+                                            mimeType:mimeType
+                                            boundary:boundary];
+    if (!writeSuccess) {
+        NSLog(@"Failed to write multipart body for taskId: %@", safeTaskId);
         [[NSNotificationCenter defaultCenter]
             postNotificationName:TransferkitUploadErrorNotification
                           object:nil
@@ -121,22 +132,87 @@
         return;
     }
 
-    [body appendData:fileData];
-    NSString *closingBoundary = [NSString stringWithFormat:@"\r\n--%@--\r\n", boundary];
-    [body appendData:[closingBoundary dataUsingEncoding:NSUTF8StringEncoding]];
-
-    [body writeToURL:tempFileURL atomically:YES];
-
     NSURLSessionUploadTask *task = [self.session uploadTaskWithRequest:request fromFile:tempFileURL];
 
     @synchronized (self) {
         self.tasksMap[safeTaskId] = task;
         self.taskIdsMap[@(task.taskIdentifier)] = safeTaskId;
+        self.tempFilesMap[safeTaskId] = tempFileURL;
     }
 
     [task resume];
     NSLog(@"Background upload started for taskId: %@", safeTaskId);
 }
+
+#pragma mark - Streamed Multipart Body Writer
+
+- (BOOL)writeMultipartBodyToFile:(NSURL *)destURL
+                         fileURL:(NSURL *)fileURL
+                       fieldName:(NSString *)fieldName
+                        fileName:(NSString *)fileName
+                        mimeType:(NSString *)mimeType
+                        boundary:(NSString *)boundary
+{
+    NSOutputStream *outputStream = [NSOutputStream outputStreamWithURL:destURL append:NO];
+    if (!outputStream) {
+        return NO;
+    }
+    [outputStream open];
+
+    // Write multipart header
+    NSString *disposition = [NSString stringWithFormat:
+        @"--%@\r\n"
+        "Content-Disposition: form-data; name=\"%@\"; filename=\"%@\"\r\n"
+        "Content-Type: %@\r\n\r\n",
+        boundary, fieldName, fileName, mimeType];
+    NSData *headerData = [disposition dataUsingEncoding:NSUTF8StringEncoding];
+    [outputStream write:headerData.bytes maxLength:headerData.length];
+
+    // Stream file contents in chunks
+    NSInputStream *inputStream = [NSInputStream inputStreamWithURL:fileURL];
+    if (!inputStream) {
+        [outputStream close];
+        [[NSFileManager defaultManager] removeItemAtURL:destURL error:nil];
+        return NO;
+    }
+    [inputStream open];
+
+    uint8_t buffer[kStreamBufferSize];
+    while ([inputStream hasBytesAvailable]) {
+        NSInteger bytesRead = [inputStream read:buffer maxLength:kStreamBufferSize];
+        if (bytesRead < 0) {
+            [inputStream close];
+            [outputStream close];
+            [[NSFileManager defaultManager] removeItemAtURL:destURL error:nil];
+            return NO;
+        }
+        if (bytesRead > 0) {
+            NSInteger totalWritten = 0;
+            while (totalWritten < bytesRead) {
+                NSInteger written = [outputStream write:(buffer + totalWritten)
+                                             maxLength:(bytesRead - totalWritten)];
+                if (written <= 0) {
+                    [inputStream close];
+                    [outputStream close];
+                    [[NSFileManager defaultManager] removeItemAtURL:destURL error:nil];
+                    return NO;
+                }
+                totalWritten += written;
+            }
+        }
+    }
+    [inputStream close];
+
+    // Write closing boundary
+    NSString *closingBoundary = [NSString stringWithFormat:@"\r\n--%@--\r\n", boundary];
+    NSData *closingData = [closingBoundary dataUsingEncoding:NSUTF8StringEncoding];
+    [outputStream write:closingData.bytes maxLength:closingData.length];
+
+    [outputStream close];
+    return YES;
+}
+
+#pragma mark - Cancel
 
 - (void)cancelUpload:(NSString *)taskId
 {
@@ -148,6 +224,7 @@
                 [self.tasksMap removeObjectForKey:taskId];
                 [self.taskIdsMap removeObjectForKey:@(task.taskIdentifier)];
             }
+            [self cleanupTempFile:taskId];
 
             [[NSNotificationCenter defaultCenter]
                 postNotificationName:TransferkitUploadCancelNotification
@@ -163,6 +240,7 @@
             }
             [self.tasksMap removeAllObjects];
             [self.taskIdsMap removeAllObjects];
+            [self cleanupAllTempFiles];
 
             [[NSNotificationCenter defaultCenter]
                 postNotificationName:TransferkitUploadCancelNotification
@@ -173,6 +251,25 @@
                             }];
         }
     }
+}
+
+#pragma mark - Temp File Cleanup
+
+- (void)cleanupTempFile:(NSString *)taskId
+{
+    NSURL *tempURL = self.tempFilesMap[taskId];
+    if (tempURL) {
+        [[NSFileManager defaultManager] removeItemAtURL:tempURL error:nil];
+        [self.tempFilesMap removeObjectForKey:taskId];
+    }
+}
+
+- (void)cleanupAllTempFiles
+{
+    for (NSURL *tempURL in [self.tempFilesMap allValues]) {
+        [[NSFileManager defaultManager] removeItemAtURL:tempURL error:nil];
+    }
+    [self.tempFilesMap removeAllObjects];
 }
 
 #pragma mark - Upload Progress
@@ -212,6 +309,7 @@ didCompleteWithError:(NSError *)error
             [self.tasksMap removeObjectForKey:taskId];
             [self.taskIdsMap removeObjectForKey:@(task.taskIdentifier)];
         }
+        [self cleanupTempFile:taskId];
     }
 
     NSHTTPURLResponse *httpResponse = (NSHTTPURLResponse *)task.response;
@@ -247,6 +345,19 @@ didCompleteWithError:(NSError *)error
                             @"taskId": taskId,
                             @"success": @YES
                         }];
+    }
+}
+
+#pragma mark - Background Session Lifecycle
+
+- (void)URLSessionDidFinishEventsForBackgroundURLSession:(NSURLSession *)session
+{
+    if (_backgroundCompletionHandler) {
+        void (^handler)(void) = _backgroundCompletionHandler;
+        _backgroundCompletionHandler = nil;
+        dispatch_async(dispatch_get_main_queue(), ^{
+            handler();
+        });
     }
 }
 

@@ -8,6 +8,8 @@
 
 + (instancetype)shared;
 
++ (void)handleBackgroundSessionCompletionHandler:(void (^)(void))completionHandler;
+
 - (void)startUpload:(NSString *)taskId
                 url:(NSString *)url
            filePath:(NSString *)filePath
