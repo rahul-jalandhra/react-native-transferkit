@@ -166,7 +166,7 @@ static void (^_backgroundCompletionHandler)(void) = nil;
         "Content-Type: %@\r\n\r\n",
         boundary, fieldName, fileName, mimeType];
     NSData *headerData = [disposition dataUsingEncoding:NSUTF8StringEncoding];
-    [outputStream write:headerData.bytes maxLength:headerData.length];
+    [outputStream write:(const uint8_t *)headerData.bytes maxLength:headerData.length];
 
     // Stream file contents in chunks
     NSInputStream *inputStream = [NSInputStream inputStreamWithURL:fileURL];
@@ -206,7 +206,7 @@ static void (^_backgroundCompletionHandler)(void) = nil;
     // Write closing boundary
     NSString *closingBoundary = [NSString stringWithFormat:@"\r\n--%@--\r\n", boundary];
     NSData *closingData = [closingBoundary dataUsingEncoding:NSUTF8StringEncoding];
-    [outputStream write:closingData.bytes maxLength:closingData.length];
+    [outputStream write:(const uint8_t *)closingData.bytes maxLength:closingData.length];
 
     [outputStream close];
     return YES;
