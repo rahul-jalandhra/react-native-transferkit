@@ -5,7 +5,7 @@
 High-performance background and foreground streaming toolkit for React Native on Android and iOS.
 
 <p align="center">
-  <img alt="npm version" src="https://img.shields.io/badge/version-0.4.1-blue.svg" />
+  <img alt="npm version" src="https://img.shields.io/badge/version-0.4.2-blue.svg" />
   <img alt="platforms" src="https://img.shields.io/badge/platforms-android%20%7C%20ios-blue.svg" />
   <img alt="react-native" src="https://img.shields.io/badge/react--native-0.79+-brightgreen.svg" />
   <img alt="architecture" src="https://img.shields.io/badge/new--architecture-enabled-success.svg" />
