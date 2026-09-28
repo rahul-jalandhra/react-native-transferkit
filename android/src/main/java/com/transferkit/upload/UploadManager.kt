@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import androidx.core.content.ContextCompat
 import androidx.work.Data
 import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
@@ -16,7 +17,7 @@ class UploadManager(private val context: Context) {
     private var uploadReceiver: BroadcastReceiver? = null
     private val progressCallbacks = java.util.concurrent.ConcurrentHashMap<String, (Double) -> Unit>()
     private val completeCallbacks = java.util.concurrent.ConcurrentHashMap<String, () -> Unit>()
-    private val errorCallbacks = java.util.concurrent.ConcurrentHashMap<String, (String) -> Unit>()
+    private val errorCallbacks = java.util.concurrent.ConcurrentHashMap<String, (String, Int?) -> Unit>()
     private val cancelCallbacks = java.util.concurrent.ConcurrentHashMap<String, () -> Unit>()
 
     fun startUpload(
@@ -30,7 +31,7 @@ class UploadManager(private val context: Context) {
         headers: Map<String, String>,
         onProgress: (Double) -> Unit,
         onComplete: () -> Unit,
-        onError: (String) -> Unit,
+        onError: (String, Int?) -> Unit,
         onCancel: () -> Unit
     ) {
         if (taskId.isNotEmpty()) {
@@ -82,6 +83,14 @@ class UploadManager(private val context: Context) {
         }
     }
 
+    fun destroy() {
+        unregisterReceiver()
+        progressCallbacks.clear()
+        completeCallbacks.clear()
+        errorCallbacks.clear()
+        cancelCallbacks.clear()
+    }
+
     private fun removeCallbacks(taskId: String) {
         progressCallbacks.remove(taskId)
         completeCallbacks.remove(taskId)
@@ -121,11 +130,16 @@ class UploadManager(private val context: Context) {
                     }
                     UploadWorker.EVENT_ERROR -> {
                         val error = intent.getStringExtra(UploadWorker.EXTRA_ERROR) ?: "Unknown upload error"
+                        val statusCode = if (intent.hasExtra(UploadWorker.EXTRA_STATUS_CODE)) {
+                            intent.getIntExtra(UploadWorker.EXTRA_STATUS_CODE, 0)
+                        } else {
+                            null
+                        }
                         if (taskId.isNotEmpty()) {
-                            errorCallbacks[taskId]?.invoke(error)
+                            errorCallbacks[taskId]?.invoke(error, statusCode)
                             removeCallbacks(taskId)
                         } else {
-                            errorCallbacks.values.forEach { it.invoke(error) }
+                            errorCallbacks.values.forEach { it.invoke(error, statusCode) }
                             unregisterReceiver()
                         }
                     }
@@ -142,9 +156,11 @@ class UploadManager(private val context: Context) {
             }
         }
 
-        context.registerReceiver(
-            uploadReceiver,
-            IntentFilter(UploadWorker.ACTION_UPLOAD_BROADCAST)
+        ContextCompat.registerReceiver(
+            context,
+            uploadReceiver!!,
+            IntentFilter(UploadWorker.ACTION_UPLOAD_BROADCAST),
+            ContextCompat.RECEIVER_NOT_EXPORTED
         )
     }
 
@@ -158,4 +174,3 @@ class UploadManager(private val context: Context) {
         }
     }
 }
-

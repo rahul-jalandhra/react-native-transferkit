@@ -4,7 +4,9 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.net.Uri
+import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.work.CoroutineWorker
 import androidx.work.ForegroundInfo
@@ -30,6 +32,7 @@ class UploadWorker(
 ) : CoroutineWorker(context, workerParams) {
 
     private val client = OkHttpClient()
+    private var tempFile: File? = null
 
     override suspend fun doWork(): Result {
         val taskId = inputData.getString(KEY_TASK_ID) ?: ""
@@ -44,7 +47,16 @@ class UploadWorker(
         val file = resolveFile(filePath, fileName)
             ?: return failure(taskId, "Unable to resolve upload file")
 
-        setForegroundAsync(createForegroundInfo(0.0, "Upload starting"))
+        // Attempt to promote to foreground service; if it fails (app in background on
+        // Android 12+, or missing service type on Android 14+), continue as a background
+        // worker instead of crashing.
+        try {
+            setForegroundAsync(createForegroundInfo(0.0, "Upload starting"))
+        } catch (e: Exception) {
+            // ForegroundServiceStartNotAllowedException on Android 12+ when app is background,
+            // or MissingForegroundServiceTypeException if manifest is misconfigured.
+            // Gracefully degrade — the upload still runs as a background worker.
+        }
 
         val headers = headersJson?.let { JSONObject(it) } ?: JSONObject()
 
@@ -76,7 +88,7 @@ class UploadWorker(
             client.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) {
                     val message = "Upload failed with HTTP ${response.code}"
-                    sendBroadcast(EVENT_ERROR, taskId, error = message)
+                    sendBroadcast(EVENT_ERROR, taskId, error = message, statusCode = response.code)
                     updateNotification(1.0, "Upload failed")
                     return Result.failure()
                 }
@@ -93,12 +105,15 @@ class UploadWorker(
             } else {
                 Result.retry()
             }
+        } finally {
+            cleanupTempFile()
         }
     }
 
     private fun failure(taskId: String, message: String): Result {
         sendBroadcast(EVENT_ERROR, taskId, error = message)
         updateNotification(1.0, "Upload failed")
+        cleanupTempFile()
         return Result.failure()
     }
 
@@ -113,15 +128,30 @@ class UploadWorker(
 
     private fun copyContentUriToFile(uri: Uri, fileName: String): File? {
         return try {
-            val tempFile = File(applicationContext.cacheDir, "upload-${UUID.randomUUID()}-$fileName")
+            val file = File(applicationContext.cacheDir, "upload-${UUID.randomUUID()}-$fileName")
             applicationContext.contentResolver.openInputStream(uri)?.use { inputStream ->
-                FileOutputStream(tempFile).use { outputStream ->
+                FileOutputStream(file).use { outputStream ->
                     inputStream.copyTo(outputStream)
                 }
             }
-            tempFile.takeIf { it.exists() }
+            if (file.exists()) {
+                tempFile = file
+                file
+            } else {
+                null
+            }
         } catch (exception: Exception) {
             null
+        }
+    }
+
+    private fun cleanupTempFile() {
+        tempFile?.let {
+            try {
+                if (it.exists()) it.delete()
+            } catch (_: Exception) {
+            }
+            tempFile = null
         }
     }
 
@@ -129,7 +159,8 @@ class UploadWorker(
         event: String,
         taskId: String = "",
         progress: Double? = null,
-        error: String? = null
+        error: String? = null,
+        statusCode: Int? = null
     ) {
         val intent = Intent(ACTION_UPLOAD_BROADCAST).apply {
             `package` = applicationContext.packageName
@@ -137,14 +168,23 @@ class UploadWorker(
             putExtra(EXTRA_TASK_ID, taskId)
             progress?.let { putExtra(EXTRA_PROGRESS, it) }
             error?.let { putExtra(EXTRA_ERROR, it) }
+            statusCode?.let { putExtra(EXTRA_STATUS_CODE, it) }
         }
         applicationContext.sendBroadcast(intent)
     }
 
-    private fun createForegroundInfo(progress: Double, title: String = "Uploading file") = ForegroundInfo(
-        NOTIFICATION_ID,
-        createNotification(progress, title)
-    )
+    private fun createForegroundInfo(progress: Double, title: String = "Uploading file"): ForegroundInfo {
+        val notification = createNotification(progress, title)
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            ForegroundInfo(
+                NOTIFICATION_ID,
+                notification,
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+            )
+        } else {
+            ForegroundInfo(NOTIFICATION_ID, notification)
+        }
+    }
 
     private fun createNotification(progress: Double, title: String) = NotificationCompat.Builder(
         applicationContext,
@@ -178,6 +218,7 @@ class UploadWorker(
         const val EXTRA_TASK_ID = "extra_upload_task_id"
         const val EXTRA_PROGRESS = "extra_upload_progress"
         const val EXTRA_ERROR = "extra_upload_error"
+        const val EXTRA_STATUS_CODE = "extra_upload_status_code"
 
         const val EVENT_PROGRESS = "progress"
         const val EVENT_COMPLETE = "complete"

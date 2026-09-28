@@ -98,10 +98,11 @@ class TransferkitModule(
                     putBoolean("success", true)
                 })
             },
-            onError = { error ->
+            onError = { error, statusCode ->
                 sendEvent("onUploadError", Arguments.createMap().apply {
                     putString("taskId", taskId)
                     putString("error", error)
+                    statusCode?.let { putInt("statusCode", it) }
                 })
             },
             onCancel = {
@@ -117,16 +118,28 @@ class TransferkitModule(
         uploadManager.cancelUpload(taskId)
     }
 
+    override fun invalidate() {
+        uploadManager.destroy()
+        super.invalidate()
+    }
+
     private fun sendEvent(
         eventName: String,
         params: WritableMap
     ) {
-        context
-            .getJSModule(
-                DeviceEventManagerModule
-                    .RCTDeviceEventEmitter::class.java
-            )
-            .emit(eventName, params)
+        if (!context.hasActiveCatalystInstance()) {
+            return
+        }
+        try {
+            context
+                .getJSModule(
+                    DeviceEventManagerModule
+                        .RCTDeviceEventEmitter::class.java
+                )
+                .emit(eventName, params)
+        } catch (_: IllegalStateException) {
+            // Catalyst instance was torn down between the check and the emit — safe to ignore
+        }
     }
 
     private fun sendEvent(
